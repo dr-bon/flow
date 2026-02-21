@@ -4,6 +4,7 @@ use std::time::Duration;
 use crossterm::terminal::ClearType;
 use std::io::stdout;
 use std::io::Write;
+use std::cmp;
 
 struct CleanUp;
 
@@ -18,12 +19,13 @@ struct Output {
     win_size: (usize, usize),
     editor_contents: EditorContents,
     cursor_controller: CursorController,
+    editor_rows: EditorRows,
 }
 
 impl Output {
     fn new() -> Self {
         let win_size = terminal::size().map(|(x, y)| (x as usize, y as usize)).unwrap();
-        Self { win_size, editor_contents: EditorContents::new(), cursor_controller: CursorController::new(win_size) }
+        Self { win_size, editor_contents: EditorContents::new(), cursor_controller: CursorController::new(win_size), editor_rows: EditorRows::new() }
     }
 
     fn clear_screen() -> crossterm::Result<()> {
@@ -39,20 +41,25 @@ impl Output {
         let screen_rows = self.win_size.1;
         let screen_cols = self.win_size.0;
         for i in 0..screen_rows {
-            if i == screen_rows / 3 {
-                let mut welcome = format!("Flow Editor --- Version {}", 1);
-                if welcome.len() > screen_cols {
-                    welcome.truncate(screen_cols);
-                }
-                let mut padding = (screen_cols - welcome.len()) / 2;
-                if padding != 0 {
+            if i >= self.editor_rows.num_rows() {
+                if i == screen_rows / 3 {
+                    let mut welcome = format!("Flow Editor --- Version {}", 1);
+                    if welcome.len() > screen_cols {
+                        welcome.truncate(screen_cols);
+                    }
+                    let mut padding = (screen_cols - welcome.len()) / 2;
+                    if padding != 0 {
+                        self.editor_contents.push('~');
+                        padding -= 1;
+                    }
+                    (0..padding).for_each(|_| self.editor_contents.push(' '));
+                    self.editor_contents.push_str(&welcome);
+                } else {
                     self.editor_contents.push('~');
-                    padding -= 1;
                 }
-                (0..padding).for_each(|_| self.editor_contents.push(' '));
-                self.editor_contents.push_str(&welcome);
             } else {
-                self.editor_contents.push('~');
+                let len = cmp::min(self.editor_rows.get_row().len(), screen_cols);
+                self.editor_contents.push_str(&self.editor_rows.get_row()[..len]);
             }
             queue!(self.editor_contents, terminal::Clear(ClearType::UntilNewLine)).unwrap();
             if i < screen_rows - 1 {
@@ -205,6 +212,25 @@ impl CursorController {
             }
             _ => unimplemented!(),
         }
+    }
+}
+
+struct EditorRows {
+    row_contents: Vec<Box<str>>,
+}
+
+impl EditorRows {
+
+    fn new() -> Self {
+        Self { row_contents: vec!["Hello World".into()] }
+    }
+
+    fn num_rows(&self) -> usize {
+        1
+    }
+
+    fn get_row(&self) -> &str {
+        &self.row_contents[0]
     }
 }
 
