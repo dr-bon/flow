@@ -21,8 +21,7 @@ impl Document {
     pub fn from_file(path: &Path) -> std::io::Result<Self> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        let rope = Rope::from_reader(reader)
-            .map_err(std::io::Error::other)?;
+        let rope = Rope::from_reader(reader).map_err(std::io::Error::other)?;
         Ok(Document { rope })
     }
 
