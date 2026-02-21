@@ -1,0 +1,16 @@
+[package]
+name = "vellum-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+vellum-app = { path = "../vellum-app" }
+
+[dev-dependencies]
+insta.workspace = true
+proptest.workspace = true
+pretty_assertions.workspace = true
+tempfile.workspace = true

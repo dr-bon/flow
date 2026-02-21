@@ -1,9 +1,34 @@
-[package]
-name = "flow"
+[workspace]
+resolver = "2"
+members = [
+    "vellum-core",
+    "vellum-app",
+    "vellum-tui",
+    "vellum-gui",
+    "vellum-tests",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+authors = ["Jonathan Bailey <jonathan.bailey@comcast.net>"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace.dependencies]
+# Core dependencies
+# TODO: TBD
 
-[dependencies]
-crossterm = "0.21.0"
+# App dependencies
+crossterm = "0.29.0"
+
+# TUI dependencies
+# TODO: TBD
+
+# GUI dependencies
+# TODO: TBD
+
+# Testing dependencies
+insta = "1.46.1"
+proptest = "1.10.0"
+pretty_assertions = "1.4.1"
+tempfile = "3.25.0"
