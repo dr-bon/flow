@@ -4,7 +4,8 @@ use std::time::Duration;
 use crossterm::terminal::ClearType;
 use std::io::stdout;
 use std::io::Write;
-use std::cmp;
+use std::{cmp, env, fs, io};
+use std::path::Path;
 
 struct CleanUp;
 
@@ -34,15 +35,16 @@ impl Output {
     }
 
     fn move_cursor(&mut self, direction: KeyCode) {
-        self.cursor_controller.move_cursor(direction);
+        self.cursor_controller.move_cursor(direction, self.editor_rows.num_rows());
     }
     
     fn draw_rows(&mut self) {
         let screen_rows = self.win_size.1;
         let screen_cols = self.win_size.0;
         for i in 0..screen_rows {
-            if i >= self.editor_rows.num_rows() {
-                if i == screen_rows / 3 {
+            let file_row = i + self.cursor_controller.row_offset;
+            if file_row >= self.editor_rows.num_rows() {
+                if self.editor_rows.num_rows() == 0 && i == screen_rows / 3 {
                     let mut welcome = format!("Flow Editor --- Version {}", 1);
                     if welcome.len() > screen_cols {
                         welcome.truncate(screen_cols);
@@ -58,8 +60,8 @@ impl Output {
                     self.editor_contents.push('~');
                 }
             } else {
-                let len = cmp::min(self.editor_rows.get_row().len(), screen_cols);
-                self.editor_contents.push_str(&self.editor_rows.get_row()[..len]);
+                let len = cmp::min(self.editor_rows.get_row(file_row).len(), screen_cols);
+                self.editor_contents.push_str(&self.editor_rows.get_row(file_row)[..len]);
             }
             queue!(self.editor_contents, terminal::Clear(ClearType::UntilNewLine)).unwrap();
             if i < screen_rows - 1 {
@@ -69,10 +71,11 @@ impl Output {
         }
     }
     fn refresh_screen(&mut self) -> crossterm::Result<()> {
+        self.cursor_controller.scroll();
         queue!(self.editor_contents, cursor::Hide, cursor::MoveTo(0, 0))?;
         self.draw_rows();
         let cursor_x = self.cursor_controller.x;
-        let cursor_y = self.cursor_controller.y;
+        let cursor_y = self.cursor_controller.y - self.cursor_controller.row_offset;
         queue!(self.editor_contents, cursor::MoveTo(cursor_x as u16, cursor_y as u16), cursor::Show)?;
         self.editor_contents.flush()
     }
@@ -177,14 +180,22 @@ struct CursorController {
     y: usize,
     screen_rows: usize,
     screen_cols: usize,
+    row_offset: usize,
 }
 
 impl CursorController {
     fn new(win_size: (usize, usize)) -> Self {
-        Self { x: 0, y: 0, screen_rows: win_size.1, screen_cols: win_size.0 }
+        Self { x: 0, y: 0, screen_rows: win_size.1, screen_cols: win_size.0, row_offset: 0 }
     }
 
-    fn move_cursor(&mut self, direction: KeyCode) {
+    fn scroll(&mut self) {
+        self.row_offset = cmp::min(self.row_offset, self.y);
+        if self.y >= self.row_offset + self.screen_rows {
+            self.row_offset = self.y - self.screen_rows + 1;
+        }
+    }
+
+    fn move_cursor(&mut self, direction: KeyCode, num_rows: usize) {
         match direction {
             KeyCode::Up => {
                 self.y = self.y.saturating_sub(1);
@@ -195,7 +206,7 @@ impl CursorController {
                 }
             }
             KeyCode::Down => {
-                if self.y != self.screen_rows - 1 {
+                if self.y < num_rows {
                     self.y += 1;
                 }
             }
@@ -222,15 +233,28 @@ struct EditorRows {
 impl EditorRows {
 
     fn new() -> Self {
-        Self { row_contents: vec!["Hello World".into()] }
+        let mut arg = env::args();
+        match arg.nth(1) {
+            None => Self {
+                row_contents: Vec::new(),
+            },
+            Some(file) => Self::from_file(file.as_ref()),
+        }
+    }
+
+    fn from_file(file: &Path) -> Self {
+        let file_contents = fs::read_to_string(file).expect("Could not read file");
+        Self {
+            row_contents: file_contents.lines().map(|line| line.into()).collect(),
+        }
     }
 
     fn num_rows(&self) -> usize {
-        1
+        self.row_contents.len()
     }
 
-    fn get_row(&self) -> &str {
-        &self.row_contents[0]
+    fn get_row(&self, index: usize) -> &str {
+        &self.row_contents[index]
     }
 }
 
