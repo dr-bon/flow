@@ -23,7 +23,7 @@ struct Output {
 impl Output {
     fn new() -> Self {
         let win_size = terminal::size().map(|(x, y)| (x as usize, y as usize)).unwrap();
-        Self { win_size, editor_contents: EditorContents::new(), cursor_controller: CursorController::new() }
+        Self { win_size, editor_contents: EditorContents::new(), cursor_controller: CursorController::new(win_size) }
     }
 
     fn clear_screen() -> crossterm::Result<()> {
@@ -162,19 +162,35 @@ impl std::io::Write for EditorContents {
 struct CursorController {
     x: usize,
     y: usize,
+    screen_rows: usize,
+    screen_cols: usize,
 }
 
 impl CursorController {
-    fn new() -> Self {
-        Self { x: 0, y: 0 }
+    fn new(win_size: (usize, usize)) -> Self {
+        Self { x: 0, y: 0, screen_rows: win_size.1, screen_cols: win_size.0 }
     }
 
     fn move_cursor(&mut self, direction: KeyCode) {
         match direction {
-            KeyCode::Up => { self.y -= 1; }
-            KeyCode::Left => { self.x -= 1; }
-            KeyCode::Down => { self.y += 1; }
-            KeyCode::Right => { self.x += 1; }
+            KeyCode::Up => {
+                self.y = self.y.saturating_sub(1);
+            }
+            KeyCode::Left => {
+                if self.x != 0 {
+                    self.x -= 1;
+                }
+            }
+            KeyCode::Down => {
+                if self.y != self.screen_rows - 1 {
+                    self.y += 1;
+                }
+            }
+            KeyCode::Right => {
+                if self.x != self.screen_cols - 1 {
+                    self.x += 1;
+                }
+            }
             _ => unimplemented!(),
         }
     }
