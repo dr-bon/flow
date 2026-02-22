@@ -12,6 +12,20 @@ pub enum DocumentPosition {
     LineCol { line: usize, col: usize, idx: usize },
 }
 
+impl DocumentPosition {
+    pub fn as_tuple(&self) -> (usize, usize, usize) {
+        match self {
+            DocumentPosition:: DocStart { line, col, idx }
+            | DocumentPosition::DocEnd { line, col, idx }
+            | DocumentPosition::LineStart { line, col, idx }
+            | DocumentPosition::LineEnd { line, col, idx }
+            | DocumentPosition::LineCol { line, col, idx } => {
+                (*line, *col, *idx)
+            }
+        }
+    }
+}
+
 pub struct Line {
     pub start_idx: usize,
     pub len_chars: usize,

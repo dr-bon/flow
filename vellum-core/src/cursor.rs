@@ -266,7 +266,7 @@ impl Cursor {
                         if wrap_doc {
                             let doc_start = doc.get_start();
                             self.pos = doc.next_token_start(doc_start.2);
-                            self.preferred_col = Some(self.pos);
+                            self.preferred_col = Some(self.pos); // In this case, the line start index is 0, so don't bother subtracting
                         }
                         // else, don't move
                     }

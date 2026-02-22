@@ -10,4 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 vellum-core = { path = "../vellum-core" }
-crossterm = "0.21.0"
+crossterm.workspace = true
+keybinds.workspace = true
+toml.workspace = true
+serde.workspace = true
