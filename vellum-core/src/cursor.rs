@@ -211,24 +211,89 @@ impl Cursor {
                 }
             }
             Direction::TokenLeft => {
-                // if doc start
-                // if doc wrap enabled, go to TokenLeft of last token of last line, set preferred col
-                // else, don't move
-                // if line start
-                // if line wrap enabled, go to TokenLeft of last token of prev line, set preferred col
-                // else, don't move
-                // else
-                // go to TokenLeft, set preferred col
+                match doc_pos {
+                    // if doc start
+                    DocumentPosition::DocStart {
+                        line: _,
+                        col: _,
+                        idx: _,
+                    } => {
+                        // if doc wrap enabled, go to TokenLeft of last token of last line, set preferred col
+                        if wrap_doc {
+                            let doc_end = doc.get_end();
+                            let last_line = doc.line(doc_end.0);
+                            let prev_token_start = doc.prev_token_start(doc_end.2);
+                            self.pos = prev_token_start;
+                            self.preferred_col = Some(self.pos - last_line.start_idx);
+                        }
+                        // else, don't move
+                    }
+                    // if line start
+                    DocumentPosition::LineStart {
+                        line,
+                        col: _,
+                        idx: _,
+                    } => {
+                        // if line wrap enabled, go to TokenLeft of last token of prev line, set preferred col
+                        if wrap_line {
+                            let prev_line = doc.line(line - 1);
+                            self.pos =
+                                doc.prev_token_start(prev_line.start_idx + prev_line.len_chars);
+                            self.preferred_col = Some(self.pos - prev_line.start_idx);
+                        }
+                        // else, don't move
+                    }
+                    // else
+                    DocumentPosition::DocEnd { line, col: _, idx }
+                    | DocumentPosition::LineEnd { line, col: _, idx }
+                    | DocumentPosition::LineCol { line, col: _, idx } => {
+                        // go to TokenLeft, set preferred col
+                        let doc_line = doc.line(line);
+                        self.pos = doc.prev_token_start(idx);
+                        self.preferred_col = Some(self.pos - doc_line.start_idx);
+                    }
+                }
             }
             Direction::TokenRight => {
-                // if doc end
-                // if doc wrap enabled, go to TokenRight of first token of first line, set preferred col
-                // else, don't move
-                // if line end
-                // if line wrap enabled, go to TokenRight of first token of next line, set preferred col
-                // else, don't move
-                // else
-                // go to TokenRight, set preferred col
+                match doc_pos {
+                    // if doc end
+                    DocumentPosition::DocEnd {
+                        line: _,
+                        col: _,
+                        idx: _,
+                    } => {
+                        // if doc wrap enabled, go to TokenRight of first token of first line, set preferred col
+                        if wrap_doc {
+                            let doc_start = doc.get_start();
+                            self.pos = doc.next_token_start(doc_start.2);
+                            self.preferred_col = Some(self.pos);
+                        }
+                        // else, don't move
+                    }
+                    // if line end
+                    DocumentPosition::LineEnd {
+                        line,
+                        col: _,
+                        idx: _,
+                    } => {
+                        // if line wrap enabled, go to TokenRight of first token of next line, set preferred col
+                        if wrap_line {
+                            let next_line = doc.line(line + 1);
+                            self.pos = doc.next_token_start(next_line.start_idx);
+                            self.preferred_col = Some(self.pos - next_line.start_idx);
+                        }
+                        // else, don't move
+                    }
+                    // else
+                    DocumentPosition::DocStart { line, col: _, idx }
+                    | DocumentPosition::LineStart { line, col: _, idx }
+                    | DocumentPosition::LineCol { line, col: _, idx } => {
+                        // go to TokenRight, set preferred col
+                        let doc_line = doc.line(line);
+                        self.pos = doc.next_token_start(idx);
+                        self.preferred_col = Some(self.pos - doc_line.start_idx);
+                    }
+                }
             }
             Direction::LineStart => {
                 match doc_pos {
