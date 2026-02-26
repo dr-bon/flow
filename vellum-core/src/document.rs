@@ -15,13 +15,11 @@ pub enum DocumentPosition {
 impl DocumentPosition {
     pub fn as_tuple(&self) -> (usize, usize, usize) {
         match self {
-            DocumentPosition:: DocStart { line, col, idx }
+            DocumentPosition::DocStart { line, col, idx }
             | DocumentPosition::DocEnd { line, col, idx }
             | DocumentPosition::LineStart { line, col, idx }
             | DocumentPosition::LineEnd { line, col, idx }
-            | DocumentPosition::LineCol { line, col, idx } => {
-                (*line, *col, *idx)
-            }
+            | DocumentPosition::LineCol { line, col, idx } => (*line, *col, *idx),
         }
     }
 }
@@ -32,7 +30,7 @@ pub struct Line {
 }
 
 pub struct DocumentBuffer {
-    contents: Rope,
+    pub contents: Rope,
 }
 
 impl Default for DocumentBuffer {
@@ -71,6 +69,14 @@ impl DocumentBuffer {
             .write_to(&mut writer)
             .map_err(std::io::Error::other)?;
         Ok(())
+    }
+
+    pub fn last_line_idx(&self) -> usize {
+        self.line_count() - 1
+    }
+
+    pub fn last_char_idx(&self) -> usize {
+        self.char_count() - 1
     }
 
     pub fn line_count(&self) -> usize {
@@ -120,14 +126,6 @@ impl DocumentBuffer {
         }
     }
 
-    pub fn get_end(&self) -> (usize, usize, usize) {
-        (
-            self.line_count() - 1,
-            self.contents.line(self.line_count() - 1).len_chars(),
-            self.char_count() - 1,
-        )
-    }
-
     pub fn get_start(&self) -> (usize, usize, usize) {
         (0, 0, 0)
     }
@@ -165,6 +163,14 @@ impl DocumentBuffer {
             }
         }
         self.char_count()
+    }
+
+    pub fn write(&mut self, txt: &str, char_idx: usize) {
+        self.contents.insert(char_idx, txt);
+    }
+
+    pub fn delete(&mut self, start: usize, end: usize) {
+        self.contents.remove(start..end);
     }
 }
 

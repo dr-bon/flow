@@ -1,6 +1,4 @@
 use serde::Deserialize;
-use crossterm::{cursor, event, execute};
-use vellum_core::editor::Editor;
 
 #[derive(Deserialize)]
 pub enum Action {
@@ -35,4 +33,31 @@ pub enum Action {
     Dedent,
     Search,
     Exit,
+}
+
+#[derive(Deserialize)]
+pub enum ActionResult {
+    Unhandled,
+    CursorShifted { line: usize, col: usize, idx: usize },
+    Saved,
+    Opened,
+    Closed,
+    Deleted,
+    DeletedLine,
+    Inserted,
+    Cut,
+    Copied,
+    Pasted,
+    Undone,
+    Redone,
+    Selected,
+    SelectedAll,
+    Bolded,
+    Italicized,
+    Underlined,
+    Struckthrough,
+    Indented,
+    Dedented,
+    Searched,
+    Exited,
 }

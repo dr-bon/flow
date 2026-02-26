@@ -1,4 +1,4 @@
-use crate::document::{DocumentBuffer, DocumentPosition};
+use crate::document::DocumentBuffer;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
@@ -12,6 +12,14 @@ pub enum Direction {
     LineEnd,
     DocStart,
     DocEnd,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WrapMode {
+    None,
+    Horizontal,
+    Vertical,
+    All,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,408 +39,124 @@ impl Default for Cursor {
 impl Cursor {
     pub fn new() -> Self {
         Self {
-            pos: 0,
-            preferred_col: Some(0),
+            pos: 0,                 // Character index within the document, row/col agnostic.
+            preferred_col: Some(0), // The last column the cursor was in, for vertical movement remembrance
         }
     }
 
-    pub fn shift(&mut self, doc: &DocumentBuffer, dir: Direction, wrap_doc: bool, wrap_line: bool) {
-        let doc_pos = doc.get_position(self.pos);
+    pub fn shift(&mut self, doc: &DocumentBuffer, dir: Direction, mag: usize, wrap_mode: WrapMode) {
+        // Valid cursor positions are 0..doc.len_chars()
+        // +1 because the cursor position is a gap between characters
+        let doc_len = isize::try_from(doc.contents.len_chars())
+            .expect("DocumentBuffer length too large for isize");
+        println!("DOC_LEN = {}", doc_len);
+        let cur_pos = isize::try_from(self.pos).expect("Cursor position too large for isize");
+        println!("POS = {}", cur_pos);
         match dir {
             Direction::Left => {
-                match doc_pos {
-                    // If pos is doc start
-                    DocumentPosition::DocStart {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    } => {
-                        // if doc wrapping enabled, move to doc end, set preferred col
-                        if wrap_doc {
-                            let doc_end = doc.get_end();
-                            self.pos = doc_end.2;
-                            self.preferred_col = Some(doc_end.1);
-                        }
-                        // else, don't move
-                    }
-                    // if pos is line start
-                    DocumentPosition::LineStart {
-                        line,
-                        col: _,
-                        idx: _,
-                    } => {
-                        // if line wrapping enabled, move to end of prev line, set preferred col
-                        if wrap_line {
-                            // DocStart accounts for line == 0 so we can safely ignore it here
-                            let prev_line = doc.line(line - 1);
-                            self.pos = prev_line.start_idx + prev_line.len_chars;
-                            self.preferred_col = Some(prev_line.len_chars);
-                        }
-                        // else, don't move
-                    }
-                    // move left, preferred col -= 1
-                    DocumentPosition::DocEnd { line: _, col, idx }
-                    | DocumentPosition::LineEnd { line: _, col, idx }
-                    | DocumentPosition::LineCol { line: _, col, idx } => {
-                        self.pos = idx - 1;
-                        self.preferred_col = Some(col - 1);
-                    }
+                let char_delta = -isize::try_from(mag).expect("Magnitude too large for isize");
+                let wrap_horizontal = matches!(wrap_mode, WrapMode::Horizontal | WrapMode::All);
+                if wrap_horizontal {
+                    self.pos = usize::try_from((cur_pos + char_delta).rem_euclid(doc_len + 1))
+                        .expect("Position incompatible with usize");
+                    let cur_line = doc.line(self.pos);
+                    self.preferred_col = Some(self.pos.saturating_sub(cur_line.start_idx));
+                } else {
+                    self.pos = usize::try_from((cur_pos + char_delta).max(0))
+                        .expect("Position incompatible with usize");
+                    let cur_line = doc.line(self.pos);
+                    self.preferred_col = Some(self.pos.saturating_sub(cur_line.start_idx));
                 }
             }
             Direction::Right => {
-                match doc_pos {
-                    // If pos is doc end
-                    DocumentPosition::DocEnd {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    } => {
-                        // if doc wrapping enabled, move to doc start, preferred col = 0
-                        if wrap_doc {
-                            self.pos = 0;
-                            self.preferred_col = Some(0);
-                        }
-                        // else, don't move
-                    }
-                    // if pos is line end
-                    DocumentPosition::LineEnd {
-                        line,
-                        col: _,
-                        idx: _,
-                    } => {
-                        // if line wrapping enabled, move to start of next line, preferred col = 0
-                        if wrap_line {
-                            // DocEnd accounts for line == last_line, so we can safely ignore it here
-                            let next_line = doc.line(line + 1);
-                            self.pos = next_line.start_idx;
-                            self.preferred_col = Some(0);
-                        }
-                        // else, don't move
-                    }
-                    // move right, preferred col += 1
-                    DocumentPosition::DocStart { line: _, col, idx }
-                    | DocumentPosition::LineStart { line: _, col, idx }
-                    | DocumentPosition::LineCol { line: _, col, idx } => {
-                        self.pos = idx + 1;
-                        self.preferred_col = Some(col + 1);
-                    }
+                let char_delta = isize::try_from(mag).expect("Magnitude too large for isize");
+                let wrap_horizonal = matches!(wrap_mode, WrapMode::Horizontal | WrapMode::All);
+                if wrap_horizonal {
+                    self.pos = usize::try_from((cur_pos + char_delta).rem_euclid(doc_len + 1))
+                        .expect("Position incompatible with usize");
+                    let cur_line = doc.line(self.pos);
+                    self.preferred_col = Some(self.pos.saturating_sub(cur_line.start_idx));
+                } else {
+                    self.pos = usize::try_from((cur_pos + char_delta).min(doc_len))
+                        .expect("Position incompatible with usize");
+                    let cur_line = doc.line(self.pos);
+                    self.preferred_col = Some(self.pos.saturating_sub(cur_line.start_idx));
                 }
             }
             Direction::Up => {
-                match doc_pos {
-                    DocumentPosition::DocStart {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::DocEnd {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineStart {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineEnd {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineCol {
-                        line,
-                        col: _,
-                        idx: _,
-                    } => {
-                        // if first line
-                        if line == 0 {
-                            // if doc wrap enabled, go to last line at min(preferred_col, last_line_col)
-                            if wrap_doc {
-                                let last_line = doc.line(doc.line_count() - 1);
-                                self.pos = last_line.start_idx
-                                    + self.preferred_col.unwrap_or(0).min(last_line.len_chars);
-                            }
-                            // else, don't move
+                let wrap_vertical = matches!(wrap_mode, WrapMode::Vertical | WrapMode::All);
+                let mut line = doc.contents.char_to_line(self.pos);
+                let line_start = doc.contents.line_to_char(line);
+                let cur_col = self.pos.saturating_sub(line_start);
+                let goal_col = self.preferred_col.unwrap_or(cur_col);
+                let total_lines = doc.contents.len_lines();
+                if total_lines == 0 {
+                    self.pos = 0;
+                    self.preferred_col = Some(0);
+                    return;
+                }
+                for _ in 0..mag {
+                    if line == 0 {
+                        if wrap_vertical {
+                            line = total_lines - 1;
+                        } else {
+                            break;
                         }
-                        // go to prev line at min(preferred_col, prev_line_col)
-                        else {
-                            let prev_line = doc.line(line - 1);
-                            self.pos = prev_line.start_idx
-                                + self.preferred_col.unwrap_or(0).min(prev_line.len_chars);
-                        }
+                    } else {
+                        line -= 1;
                     }
                 }
+                let line_slice = doc.contents.line(line);
+                let mut line_len = line_slice.len_chars();
+                if line_len > 0 && line_slice.char(line_len - 1) == '\n' {
+                    line_len -= 1;
+                }
+                let target_col = goal_col.min(line_len);
+                let target_pos = doc.contents.line_to_char(line) + target_col;
+                self.pos = target_pos;
+                self.preferred_col = Some(goal_col);
             }
             Direction::Down => {
-                match doc_pos {
-                    DocumentPosition::DocStart {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::DocEnd {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineStart {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineEnd {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineCol {
-                        line,
-                        col: _,
-                        idx: _,
-                    } => {
-                        // if last line
-                        if line == doc.line_count() - 1 {
-                            // if doc wrap enabled, go to first line at min(preferred_col, first_line_col)
-                            if wrap_doc {
-                                let first_line = doc.line(0);
-                                self.pos = first_line.start_idx
-                                    + self.preferred_col.unwrap_or(0).min(first_line.len_chars);
-                            }
-                            // else, don't move
+                let wrap_vertical = matches!(wrap_mode, WrapMode::Vertical | WrapMode::All);
+                let mut line = doc.contents.char_to_line(self.pos);
+                let line_start = doc.contents.line_to_char(line);
+                let cur_col = self.pos.saturating_sub(line_start);
+
+                let goal_col = self.preferred_col.unwrap_or(cur_col);
+
+                let total_lines = doc.contents.len_lines();
+                if total_lines == 0 {
+                    self.pos = 0;
+                    self.preferred_col = Some(0);
+                    return;
+                }
+
+                for _ in 0..mag {
+                    if line + 1 >= total_lines {
+                        if wrap_vertical {
+                            line = 0;
+                        } else {
+                            break;
                         }
-                        // go to next line at min(preferred_col, next_line_col)
-                        else {
-                            let next_line = doc.line(line + 1);
-                            self.pos = next_line.start_idx
-                                + self.preferred_col.unwrap_or(0).min(next_line.len_chars);
-                        }
+                    } else {
+                        line += 1;
                     }
                 }
-            }
-            Direction::TokenLeft => {
-                match doc_pos {
-                    // if doc start
-                    DocumentPosition::DocStart {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    } => {
-                        // if doc wrap enabled, go to TokenLeft of last token of last line, set preferred col
-                        if wrap_doc {
-                            let doc_end = doc.get_end();
-                            let last_line = doc.line(doc_end.0);
-                            let prev_token_start = doc.prev_token_start(doc_end.2);
-                            self.pos = prev_token_start;
-                            self.preferred_col = Some(self.pos - last_line.start_idx);
-                        }
-                        // else, don't move
-                    }
-                    // if line start
-                    DocumentPosition::LineStart {
-                        line,
-                        col: _,
-                        idx: _,
-                    } => {
-                        // if line wrap enabled, go to TokenLeft of last token of prev line, set preferred col
-                        if wrap_line {
-                            let prev_line = doc.line(line - 1);
-                            self.pos =
-                                doc.prev_token_start(prev_line.start_idx + prev_line.len_chars);
-                            self.preferred_col = Some(self.pos - prev_line.start_idx);
-                        }
-                        // else, don't move
-                    }
-                    // else
-                    DocumentPosition::DocEnd { line, col: _, idx }
-                    | DocumentPosition::LineEnd { line, col: _, idx }
-                    | DocumentPosition::LineCol { line, col: _, idx } => {
-                        // go to TokenLeft, set preferred col
-                        let doc_line = doc.line(line);
-                        self.pos = doc.prev_token_start(idx);
-                        self.preferred_col = Some(self.pos - doc_line.start_idx);
-                    }
+
+                let line_slice = doc.contents.line(line);
+                let mut line_len = line_slice.len_chars();
+                if line_len > 0 && line_slice.char(line_len - 1) == '\n' {
+                    line_len -= 1;
                 }
+
+                let target_col = goal_col.min(line_len);
+                let target_pos = doc.contents.line_to_char(line) + target_col;
+
+                self.pos = target_pos;
+                self.preferred_col = Some(goal_col);
             }
-            Direction::TokenRight => {
-                match doc_pos {
-                    // if doc end
-                    DocumentPosition::DocEnd {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    } => {
-                        // if doc wrap enabled, go to TokenRight of first token of first line, set preferred col
-                        if wrap_doc {
-                            let doc_start = doc.get_start();
-                            self.pos = doc.next_token_start(doc_start.2);
-                            self.preferred_col = Some(self.pos); // In this case, the line start index is 0, so don't bother subtracting
-                        }
-                        // else, don't move
-                    }
-                    // if line end
-                    DocumentPosition::LineEnd {
-                        line,
-                        col: _,
-                        idx: _,
-                    } => {
-                        // if line wrap enabled, go to TokenRight of first token of next line, set preferred col
-                        if wrap_line {
-                            let next_line = doc.line(line + 1);
-                            self.pos = doc.next_token_start(next_line.start_idx);
-                            self.preferred_col = Some(self.pos - next_line.start_idx);
-                        }
-                        // else, don't move
-                    }
-                    // else
-                    DocumentPosition::DocStart { line, col: _, idx }
-                    | DocumentPosition::LineStart { line, col: _, idx }
-                    | DocumentPosition::LineCol { line, col: _, idx } => {
-                        // go to TokenRight, set preferred col
-                        let doc_line = doc.line(line);
-                        self.pos = doc.next_token_start(idx);
-                        self.preferred_col = Some(self.pos - doc_line.start_idx);
-                    }
-                }
-            }
-            Direction::LineStart => {
-                match doc_pos {
-                    // if line start, do nothing
-                    DocumentPosition::LineStart {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    } => {}
-                    // go to current line start, preferred col = 0
-                    DocumentPosition::DocStart {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::DocEnd {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineEnd {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineCol {
-                        line,
-                        col: _,
-                        idx: _,
-                    } => {
-                        self.pos = doc.line(line).start_idx;
-                        self.preferred_col = Some(0);
-                    }
-                }
-            }
-            Direction::LineEnd => {
-                match doc_pos {
-                    // if line end, do nothing
-                    DocumentPosition::LineEnd {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    } => {}
-                    // go to current line end, set preferred col
-                    DocumentPosition::DocStart {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::DocEnd {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineStart {
-                        line,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineCol {
-                        line,
-                        col: _,
-                        idx: _,
-                    } => {
-                        let doc_line = doc.line(line);
-                        self.pos = doc_line.start_idx + doc_line.len_chars;
-                        self.preferred_col = Some(doc_line.len_chars);
-                    }
-                }
-            }
-            Direction::DocStart => {
-                match doc_pos {
-                    // if doc start, do nothing
-                    DocumentPosition::DocStart {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    } => {}
-                    // go to doc start, preferred col = 0
-                    DocumentPosition::DocEnd {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineStart {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineEnd {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineCol {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    } => {
-                        self.pos = 0;
-                        self.preferred_col = Some(0);
-                    }
-                }
-            }
-            Direction::DocEnd => {
-                match doc_pos {
-                    // if doc end, do nothing
-                    DocumentPosition::DocEnd {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    } => {}
-                    // go to doc end, set preferred col
-                    DocumentPosition::DocStart {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineStart {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineEnd {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    }
-                    | DocumentPosition::LineCol {
-                        line: _,
-                        col: _,
-                        idx: _,
-                    } => {
-                        let doc_line = doc.line(doc.line_count() - 1);
-                        self.pos = doc_line.start_idx + doc_line.len_chars;
-                        self.preferred_col = Some(doc_line.len_chars);
-                    }
-                }
-            }
+            _ => {}
         }
+        println!("UPDATED_POS = {}", self.pos);
     }
 }
