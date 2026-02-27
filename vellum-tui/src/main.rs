@@ -1,7 +1,7 @@
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use crossterm::terminal::ClearType;
 use crossterm::{cursor, event, execute, terminal};
-use std::io::{stdout, Result};
+use std::io::{stdout, Result, Write};
 // use std::path::Path;
 use std::time::Duration;
 use vellum_app::actions::{Action, ActionResult};
@@ -11,14 +11,48 @@ struct CleanUp;
 impl Drop for CleanUp {
     fn drop(&mut self) {
         terminal::disable_raw_mode().expect("Unable to disable terminal raw mode.");
-        execute!(stdout(), terminal::Clear(ClearType::All)).expect("Failed to clear terminal");
-        execute!(stdout(), cursor::MoveTo(0, 0)).expect("Failed to reset cursor position.")
+        ViewPort::clear_screen().expect("Error");
+    }
+}
+
+struct ViewPort {
+    view_size: (usize, usize),
+}
+
+impl ViewPort {
+    fn new() -> Self {
+        let view_size = terminal::size()
+            .map(|(x, y)| (x as usize, y as usize))
+            .unwrap();
+        Self { view_size }
+    }
+
+    fn draw_rows(&self) {
+        for i in 0..self.view_size.1 {
+            print!("~");
+            if i < self.view_size.1 - 1 {
+                println!("\r")
+            }
+            stdout().flush().expect("Error");
+        }
+    }
+
+    fn clear_screen() -> Result<()> {
+        execute!(stdout(), terminal::Clear(ClearType::All))?;
+        execute!(stdout(), cursor::MoveTo(0, 0))
+    }
+
+    fn refresh_screen(&self) -> Result<()> {
+        Self::clear_screen()?;
+        self.draw_rows();
+        execute!(stdout(), cursor::MoveTo(0, 0))
     }
 }
 
 fn main() -> Result<()> {
     // let fp = Path::new("hello_world.txt");
     let _clean_up = CleanUp;
+    let view = ViewPort::new();
     let win_size = terminal::size()
         .map(|(x, y)| (x as usize, y as usize))
         .unwrap();
@@ -27,6 +61,7 @@ fn main() -> Result<()> {
     // app.editor.load_document_from_file(fp);
     terminal::enable_raw_mode()?;
     loop {
+        view.refresh_screen()?;
         if event::poll(Duration::from_millis(500))? {
             if let Event::Key(event) = event::read()? {
                 match event {
