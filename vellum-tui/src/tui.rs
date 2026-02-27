@@ -10,6 +10,7 @@ use vellum_app::application::Application;
 pub struct TUI {
     view_size: (usize, usize),
     txt_buffer: String,
+    cursor_pos: (u16, u16),
     app: Application,
 }
 
@@ -20,6 +21,7 @@ impl TUI {
                 .map(|(x, y)| (x as usize, y as usize))
                 .unwrap(),
             txt_buffer: String::new(),
+            cursor_pos: (0, 0),
             app: Application::new(),
         }
     }
@@ -45,7 +47,8 @@ impl TUI {
     fn refresh_screen(&mut self) -> io::Result<()> {
         queue!(self, cursor::Hide, cursor::MoveTo(0, 0))?;
         self.draw_rows();
-        queue!(self, cursor::MoveTo(0, 0), cursor::Show)?;
+        let (x, y) = self.cursor_pos;
+        queue!(self, cursor::MoveTo(x, y), cursor::Show)?;
         self.flush()
     }
 
@@ -75,7 +78,7 @@ impl TUI {
                 if let ActionResult::CursorShifted { line, col, .. } =
                     self.app.execute_action(Action::ShiftCursorUp)
                 {
-                    execute!(stdout(), cursor::MoveTo(line as u16, col as u16))?;
+                    self.cursor_pos = (line as u16, col as u16);
                 }
             }
             KeyEvent {
@@ -86,7 +89,7 @@ impl TUI {
                 if let ActionResult::CursorShifted { line, col, .. } =
                     self.app.execute_action(Action::ShiftCursorDown)
                 {
-                    execute!(stdout(), cursor::MoveTo(line as u16, col as u16))?;
+                    self.cursor_pos = (line as u16, col as u16);
                 }
             }
             KeyEvent {
@@ -97,7 +100,7 @@ impl TUI {
                 if let ActionResult::CursorShifted { line, col, .. } =
                     self.app.execute_action(Action::ShiftCursorLeft)
                 {
-                    execute!(stdout(), cursor::MoveTo(line as u16, col as u16))?;
+                    self.cursor_pos = (line as u16, col as u16);
                 }
             }
             KeyEvent {
@@ -108,7 +111,7 @@ impl TUI {
                 if let ActionResult::CursorShifted { line, col, .. } =
                     self.app.execute_action(Action::ShiftCursorRight)
                 {
-                    execute!(stdout(), cursor::MoveTo(line as u16, col as u16))?;
+                    self.cursor_pos = (line as u16, col as u16);
                 }
             }
             _ => {}
