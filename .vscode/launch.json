@@ -5,12 +5,30 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug TUI (Launch)",
             "type": "lldb",
             "request": "launch",
-            "name": "Debug TUI",
             "program": "${workspaceFolder}/target/debug/vellum-tui",
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated"
         },
+        {
+            "name": "Attach to vellum-tui",
+            "type": "lldb",
+            "request": "attach",
+            "pid": "${command:pickMyProcess}",
+            "stopOnEntry": false
+        }
+    ],
+    "inputs": [
+        {
+            "id": "pickVellumProcess",
+            "type": "command",
+            "command": "lldb.pickMyProcess",
+            "args": {
+                "filter": "vellum-tui"
+            }
+        }
     ]
 }

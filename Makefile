@@ -30,3 +30,6 @@ test:
 
 tui:
 	cargo run --release -p vellum-tui
+
+dtui:
+	cargo run -p vellum-tui
